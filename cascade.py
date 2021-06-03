@@ -10,17 +10,20 @@ import telegram
 from telegram.ext import Updater, CommandHandler, Filters, MessageHandler
 import xml.etree.ElementTree as ET
 
-sys.path.append('/home/pi/CatPreyAnalyzer')
+sys.path.append('/home/s0000233/workspace/private/')
 sys.path.append('/home/pi')
-from CatPreyAnalyzer.model_stages import PC_Stage, FF_Stage, Eye_Stage, Haar_Stage, CC_MobileNet_Stage
-from CatPreyAnalyzer.camera_class import Camera
+sys.path.append('/home/s0000233/workspace/private/tf_models/models/research')
+sys.path.append('/home/s0000233/workspace/private/tf_models/models/research/slim')
+
+from Cat_Prey_Analyzer.model_stages import PC_Stage, FF_Stage, Eye_Stage, Haar_Stage, CC_MobileNet_Stage
+from Cat_Prey_Analyzer.camera_class import Camera
 cat_cam_py = str(Path(os.getcwd()).parents[0])
 
 
 class Spec_Event_Handler():
     def __init__(self):
-        self.img_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/debug/input')
-        self.out_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/debug/output')
+        self.img_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/debug/input')
+        self.out_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/debug/output')
 
         self.img_list = [x for x in sorted(os.listdir(self.img_dir)) if'.jpg' in x]
         self.base_cascade = Cascade()
@@ -62,9 +65,8 @@ class Spec_Event_Handler():
                 single_cascade.pc_inference_time]))
             print("Total Inference Time:", single_cascade.total_inference_time)
             print('Total Runtime:', time.time() - start_time)
-
             # Write img to output dir and log csv of each event
-            cv2.imwrite(os.path.join(self.out_dir, single_cascade.img_name), single_cascade.output_img)
+            cv2.imwrite(os.path.join(self.out_dir,single_cascade.target_directoy, single_cascade.img_name), single_cascade.output_img)
             #self.log_to_csv(img_event_obj=single_cascade)
 
 class Sequential_Cascade_Feeder():
@@ -297,7 +299,7 @@ class Sequential_Cascade_Feeder():
     def single_debug(self):
         start_time = time.time()
         target_img_name = 'dummy_img.jpg'
-        target_img = cv2.imread(os.path.join(cat_cam_py, 'CatPreyAnalyzer/readme_images/lenna_casc_Node1_001557_02_2020_05_24_09-49-35.jpg'))
+        target_img = cv2.imread(os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/readme_images/lenna_casc_Node1_001557_02_2020_05_24_09-49-35.jpg'))
         cascade_obj = self.feed(target_img=target_img, img_name=target_img_name)[1]
         print('Runtime:', time.time() - start_time)
         return cascade_obj
@@ -310,7 +312,7 @@ class Sequential_Cascade_Feeder():
         camera_thread = Thread(target=camera.fill_queue, args=(self.main_deque,), daemon=True)
         camera_thread.start()
 
-        while(True):
+        while(False):
             if len(self.main_deque) > self.QUEQUE_MAX_THRESHOLD:
                 self.main_deque.clear()
                 self.reset_cumuli_et_al()
@@ -409,6 +411,7 @@ class Event_Element():
         self.pc_inference_time = None
         self.total_inference_time = None
         self.output_img = None
+        self.target_directory = None
 
 class Cascade:
     def __init__(self):
@@ -432,6 +435,7 @@ class Cascade:
         event_img_object.cc_pred_bb = pred_cc_bb_full
         event_img_object.bbs_target_img = bbs_target_img
         event_img_object.cc_inference_time = cc_inference_time
+        event_img_object.target_directoy = "no_prey"
 
         if cat_bool and bbs_target_img.size != 0:
             print('Cat Detected!')
@@ -486,6 +490,8 @@ class Cascade:
                 event_img_object.pc_prey_class = pred_class
                 event_img_object.pc_prey_val = pred_val
                 event_img_object.pc_inference_time = inference_time
+                if(pred_class):
+                    event_img_object.target_directoy = "prey"
 
             else:
                 print('No Face Found...')
@@ -625,8 +631,8 @@ class Cascade:
 class NodeBot():
     def __init__(self):
         #Insert Chat ID and Bot Token according to Telegram API
-        #self.CHAT_ID = 'xxxxxxxxxxxxx'
-        #self.BOT_TOKEN = 'xxxxxxxxxxxxx'
+        self.CHAT_ID = '1768522471'
+        self.BOT_TOKEN = '1866125204:AAG4FuYkpq7D_7wKe9fB3dhs91lNYsgnu2M'
 
         self.last_msg_id = 0
         self.bot_updater = Updater(token=self.BOT_TOKEN)
@@ -711,7 +717,7 @@ class NodeBot():
 
 class DummyDQueque():
     def __init__(self):
-        self.target_img = cv2.imread(os.path.join(cat_cam_py, 'CatPreyAnalyzer/readme_images/lenna_casc_Node1_001557_02_2020_05_24_09-49-35.jpg'))
+        self.target_img = cv2.imread(os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/readme_images/lenna_casc_Node1_001557_02_2020_05_24_09-49-35.jpg'))
 
     def dummy_queque_filler(self, main_deque):
         while(True):
@@ -721,5 +727,7 @@ class DummyDQueque():
             time.sleep(0.4)
 
 if __name__ == '__main__':
-    sq_cascade = Sequential_Cascade_Feeder()
-    sq_cascade.queque_handler()
+    # sq_cascade = Sequential_Cascade_Feeder()
+    # sq_cascade.queque_handler()
+    debug_handler = Spec_Event_Handler()
+    debug_handler.debug()

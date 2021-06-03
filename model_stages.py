@@ -7,11 +7,11 @@ from object_detection.utils import label_map_util
 
 cat_cam_py = str(Path(os.getcwd()).parents[0])
 print('CatCamPy:', cat_cam_py)
-PC_models_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/models/Prey_Classifier')
-FF_models_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/models/Face_Fur_Classifier')
-EYE_models_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/models/Eye_Detector')
-HAAR_models_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/models/Haar_Classifier')
-CR_models_dir = os.path.join(cat_cam_py, 'CatPreyAnalyzer/models/Cat_Recognizer')
+PC_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Prey_Classifier')
+FF_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Face_Fur_Classifier')
+EYE_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Eye_Detector')
+HAAR_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Haar_Classifier')
+CR_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Cat_Recognizer')
 
 
 class CC_MobileNet_Stage():
@@ -30,7 +30,7 @@ class CC_MobileNet_Stage():
 
         # Grab path to current working directory
         print(os.environ['PYTHONPATH'].split(os.pathsep)[1])
-        TF_OD_PATH = os.environ['PYTHONPATH'].split(os.pathsep)[1] + '/object_detection'
+        TF_OD_PATH = "/home/s0000233/workspace/private/tf_models/models/research"+ '/object_detection'
         print(TF_OD_PATH)
 
         # Path to frozen detection graph .pb file, which contains the model that is used

@@ -11,7 +11,7 @@ The difference of this project however is that it aims to solve *general* cat-pr
 # How to use the Code
 The code is meant to run on a RPI4 with the [IR JoyIt Camera](https://joy-it.net/de/products/rb-camera-IR_PRO) attached. If you have knowledge regarding Keras, you can also run the models on your own, as the .h5 files can be found in the /models directory (check the input shapes, as they can vary). Nonetheless, I will explain the prerequesites to run this project on the RPI4 with the attached infrared camera:
 
-- Download the whole project and transfer it to your RPI. Make sure to place the folder in your home directory such that its path matches: ```/home/pi/CatPreyAnalyzer```
+- Download the whole project and transfer it to your RPI. Make sure to place the folder in your home directory such that its path matches: ```/home/pi/Cat_Prey_Analyzer```
 
 - Install the tensorflow object detection API as explained in [EdjeElectronics Repositoy](https://github.com/EdjeElectronics/TensorFlow-Object-Detection-on-the-Raspberry-Pi), which provides other excellent RPI object detection information.
 
@@ -26,11 +26,11 @@ The code is meant to run on a RPI4 with the [IR JoyIt Camera](https://joy-it.net
   
   - If you want your RPI to directly boot into the Cat_Prey_Analyzer then I suggest you use a crontab. To do so, on the RPI type: ```crontab -e``` and enter 
   ```
-  @reboot sleep 30 && sudo /home/pi/CatPreyAnalyzer/catCam_starter.sh
+  @reboot sleep 30 && sudo /home/pi/Cat_Prey_Analyzer/catCam_starter.sh
   ```
   - Don't forget to make the ```catCam_starter.sh``` executable by performing 
   ```
-  chmod +x /home/pi/CatPreyAnalyzer/catCam_starter.sh
+  chmod +x /home/pi/Cat_Prey_Analyzer/catCam_starter.sh
   ```
   - Reboot and enjoy!
   
