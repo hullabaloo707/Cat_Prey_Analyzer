@@ -13,10 +13,9 @@ EYE_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Eye_Detector
 HAAR_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Haar_Classifier')
 CR_models_dir = os.path.join(cat_cam_py, 'Cat_Prey_Analyzer/models/Cat_Recognizer')
 
-
 class CC_MobileNet_Stage():
     def __init__(self):
-        self.MODEL_NAME = 'ssdlite_mobilenet_v2_coco_2018_05_09'
+        self.MODEL_NAME = 'exported_model'
         self.img_org = None
 
         # Start the CNN
@@ -30,7 +29,7 @@ class CC_MobileNet_Stage():
 
         # Grab path to current working directory
         print(os.environ['PYTHONPATH'].split(os.pathsep)[1])
-        TF_OD_PATH = "/home/s0000233/workspace/private/tf_models/models/research"+ '/object_detection'
+        TF_OD_PATH = "/home/s0000233/workspace/private/cat_face_detection"+ '/training'
         print(TF_OD_PATH)
 
         # Path to frozen detection graph .pb file, which contains the model that is used
@@ -38,10 +37,10 @@ class CC_MobileNet_Stage():
         PATH_TO_CKPT = os.path.join(TF_OD_PATH, self.MODEL_NAME, 'frozen_inference_graph.pb')
 
         # Path to label map file
-        PATH_TO_LABELS = os.path.join(TF_OD_PATH, 'data', 'mscoco_label_map.pbtxt')
+        PATH_TO_LABELS = os.path.join(TF_OD_PATH, 'label_map.pbtxt')
 
         # Number of classes the object detector can identify
-        NUM_CLASSES = 90
+        NUM_CLASSES = 2
 
         ## Load the label map.
         # Label maps map indices to category names, so that when the convolution
@@ -143,7 +142,7 @@ class CC_MobileNet_Stage():
 
 
 
-        if (int(classes[0][0]) == 17 or int(classes[0][0]) == 18):
+        if (int(classes[0][0]) == 1):
             return True, target_box, inference_time
 
         else:
@@ -267,6 +266,7 @@ class PC_Stage():
                                                        custom_objects=dependencies)
         else:
             self.pc_model = tf.keras.models.load_model(os.path.join(PC_models_dir, self.pc_model_name))
+        self.pc_model.summary()
 
     def get_f1(self, y_true, y_pred):  # taken from old keras source code
         K = tf.keras.backend
@@ -279,6 +279,9 @@ class PC_Stage():
         return f1_val
 
     def resize_img(self, img_org):
+        return cv2.resize(img_org, (self.TARGET_SIZE, self.TARGET_SIZE)) * (1. / 255)
+
+    def resize_img1(self, img_org):
         return cv2.resize(img_org, (self.TARGET_SIZE, self.TARGET_SIZE)) * (1. / 255)
 
     def pc_prediction(self, img, pc_model):
@@ -319,6 +322,7 @@ class FF_Stage():
         self.tn = 0
         self.fn = 0
         self.inference_time_list = []
+        self.counter = 0
 
         # Handle args
         self.models_dir = FF_models_dir
@@ -326,6 +330,7 @@ class FF_Stage():
         self.ff_model = tf.keras.models.load_model(os.path.join(self.models_dir, self.ff_model_name))
 
     def resize_img(self, img_org):
+
         return cv2.resize(img_org, (self.TARGET_SIZE, self.TARGET_SIZE)) * (1. / 255)
 
 

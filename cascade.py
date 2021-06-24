@@ -421,6 +421,7 @@ class Cascade:
         self.ff_stage = FF_Stage()
         self.eyes_stage = Eye_Stage()
         self.haar_stage = Haar_Stage()
+        self.counter = 0
 
     def do_single_cascade(self, event_img_object):
         print(event_img_object.img_name)
@@ -440,45 +441,55 @@ class Cascade:
         if cat_bool and bbs_target_img.size != 0:
             print('Cat Detected!')
             rec_img = self.cc_mobile_stage.draw_rectangle(img=original_copy_img, box=pred_cc_bb_full, color=(255, 0, 0), text='CC_Pred')
+            snout_crop = bbs_target_img
+            inf_bb = pred_cc_bb_full
 
-            #Do HAAR
-            haar_snout_crop, haar_bbs, haar_inference_time, haar_found_bool = self.do_haar_stage(target_img=bbs_target_img, pred_cc_bb_full=pred_cc_bb_full, cc_target_img=cc_target_img)
-            rec_img = self.cc_mobile_stage.draw_rectangle(img=rec_img, box=haar_bbs, color=(0, 255, 255), text='HAAR_Pred')
-
-            event_img_object.haar_pred_bb = haar_bbs
-            event_img_object.haar_inference_time = haar_inference_time
-
-            if haar_found_bool and haar_snout_crop.size != 0 and self.cc_haar_overlap(cc_bbs=pred_cc_bb_full, haar_bbs=haar_bbs) >= 0.1:
-                inf_bb = haar_bbs
-                face_bool = True
-                snout_crop = haar_snout_crop
-
-            else:
-                # Do EYES
-                bbs_snout_crop, bbs, eye_inference_time = self.do_eyes_stage(eye_target_img=bbs_target_img,
-                                                                             cc_pred_bb=pred_cc_bb_full,
-                                                                             cc_target_img=cc_target_img)
-                rec_img = self.cc_mobile_stage.draw_rectangle(img=rec_img, box=bbs, color=(255, 0, 255), text='BBS_Pred')
-                event_img_object.bbs_pred_bb = bbs
-                event_img_object.bbs_inference_time = eye_inference_time
-
-                # Do FF for Haar and EYES
-                bbs_dk_bool, bbs_face_bool, bbs_ff_conf, bbs_ff_inference_time = self.do_ff_stage(snout_crop=bbs_snout_crop)
-                event_img_object.ff_bbs_bool = bbs_face_bool
-                event_img_object.ff_bbs_val = bbs_ff_conf
-                event_img_object.ff_bbs_inference_time = bbs_ff_inference_time
-
-                inf_bb = bbs
-                face_bool = bbs_face_bool
-                snout_crop = bbs_snout_crop
-
-            event_img_object.face_bool = face_bool
-            event_img_object.face_box = inf_bb
-
+        # #Do HAAR
+            # haar_snout_crop, haar_bbs, haar_inference_time, haar_found_bool = self.do_haar_stage(target_img=bbs_target_img, pred_cc_bb_full=pred_cc_bb_full, cc_target_img=cc_target_img)
+            # rec_img = self.cc_mobile_stage.draw_rectangle(img=rec_img, box=haar_bbs, color=(0, 255, 255), text='HAAR_Pred')
+            #
+            # event_img_object.haar_pred_bb = haar_bbs
+            # event_img_object.haar_inference_time = haar_inference_time
+            #
+            # if haar_found_bool and haar_snout_crop.size != 0 and self.cc_haar_overlap(cc_bbs=pred_cc_bb_full, haar_bbs=haar_bbs) >= 0.1:
+            #     inf_bb = haar_bbs
+            #     face_bool = True
+            #     snout_crop = haar_snout_crop
+            #
+            # else:
+            #     # Do EYES
+            #     bbs_snout_crop, bbs, eye_inference_time = self.do_eyes_stage(eye_target_img=bbs_target_img,
+            #                                                                  cc_pred_bb=pred_cc_bb_full,
+            #                                                                  cc_target_img=cc_target_img)
+            #     rec_img = self.cc_mobile_stage.draw_rectangle(img=rec_img, box=bbs, color=(255, 0, 255), text='BBS_Pred')
+            #     event_img_object.bbs_pred_bb = bbs
+            #     event_img_object.bbs_inference_time = eye_inference_time
+            #
+            #     # Do FF for Haar and EYES
+            #     bbs_dk_bool, bbs_face_bool, bbs_ff_conf, bbs_ff_inference_time = self.do_ff_stage(snout_crop=bbs_snout_crop)
+            #     event_img_object.ff_bbs_bool = bbs_face_bool
+            #     event_img_object.ff_bbs_val = bbs_ff_conf
+            #     event_img_object.ff_bbs_inference_time = bbs_ff_inference_time
+            #
+            #     inf_bb = bbs
+            #     face_bool = bbs_face_bool
+            #     snout_crop = bbs_snout_crop
+            #
+            # event_img_object.face_bool = face_bool
+            # event_img_object.face_box = inf_bb
+            face_bool = True
             if face_bool:
                 rec_img = self.cc_mobile_stage.draw_rectangle(img=rec_img, box=inf_bb, color=(255, 255, 255), text='INF_Pred')
                 print('Face Detected!')
 
+                #
+                # cv2.imshow('image',snout_crop)
+                # cv2.waitKey(0)
+                # cv2.imwrite(os.path.join('/home/s0000233/workspace/private/Cat_Prey_Analyzer/debug/FF_input_unsorted',filename),img)
+                # filename = str( self.counter) + ".jpg"
+                # self.counter += 1
+
+                # cv2.imwrite(os.path.join('/home/s0000233/workspace/private/Cat_Prey_Analyzer/debug/FF_input_unsorted',filename),self.pc_stage.resize_img1(snout_crop))
                 #Do PC
                 pred_class, pred_val, inference_time = self.do_pc_stage(pc_target_img=snout_crop)
                 print('Prey Prediction: ' + str(pred_class))
