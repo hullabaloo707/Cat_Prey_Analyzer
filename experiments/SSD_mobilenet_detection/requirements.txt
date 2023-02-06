@@ -1,0 +1,3 @@
+pycocotools
+object_detection
+tf_slim

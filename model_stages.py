@@ -29,14 +29,13 @@ class CC_MobileNet_Stage():
         sys.path.append('..')
 
         # Grab path to current working directory
-        print(os.environ['PYTHONPATH'].split(os.pathsep)[1])
+        # print(os.environ['PYTHONPATH'].split(os.pathsep)[1])
         TF_OD_PATH = "/home/s0000233/workspace/private/tf_models/models/research"+ '/object_detection'
         print(TF_OD_PATH)
 
         # Path to frozen detection graph .pb file, which contains the model that is used
         # for object detection.
         PATH_TO_CKPT = os.path.join(TF_OD_PATH, self.MODEL_NAME, 'frozen_inference_graph.pb')
-
         # Path to label map file
         PATH_TO_LABELS = os.path.join(TF_OD_PATH, 'data', 'mscoco_label_map.pbtxt')
 

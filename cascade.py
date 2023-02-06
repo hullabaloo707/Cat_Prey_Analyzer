@@ -437,6 +437,10 @@ class Cascade:
         event_img_object.cc_inference_time = cc_inference_time
         event_img_object.target_directoy = "no_prey"
 
+        if bbs_target_img is not None:
+            cv2.imwrite(os.path.join(cat_cam_py,'Cat_Prey_Analyzer/debug/output/cat_crop', event_img_object.img_name), bbs_target_img)
+
+
         if cat_bool and bbs_target_img.size != 0:
             print('Cat Detected!')
             rec_img = self.cc_mobile_stage.draw_rectangle(img=original_copy_img, box=pred_cc_bb_full, color=(255, 0, 0), text='CC_Pred')
@@ -452,6 +456,7 @@ class Cascade:
                 inf_bb = haar_bbs
                 face_bool = True
                 snout_crop = haar_snout_crop
+                cv2.imwrite(os.path.join(cat_cam_py,'Cat_Prey_Analyzer/debug/output/cat_face', event_img_object.img_name), snout_crop)
 
             else:
                 # Do EYES
