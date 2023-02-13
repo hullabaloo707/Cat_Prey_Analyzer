@@ -74,6 +74,12 @@ def show_inference(model, image_path,class_id):
     boxes = np.array(boxes)
     classes = np.array(classes)
     scores = np.array(scores)
+    print(classes)
+    print(boxes)
+
+    print(category_index)
+
+    return
     vis_util.visualize_boxes_and_labels_on_image_array(
         image_np,
         boxes,
@@ -114,14 +120,14 @@ detection_model = load_model(model_name)
 
 total=0
 detected=0
-for image_path in TEST_IMAGE_PATHS:
-    total+=1
-    print(image_path)
-
-    if is_class(detection_model, image_path, 17):
-        detected+=1
-print(f"total: {total}, detected: {detected}")
-#
 # for image_path in TEST_IMAGE_PATHS:
+#     total+=1
 #     print(image_path)
-#     show_inference(detection_model, image_path, 17)
+#
+#     if is_class(detection_model, image_path, 17):
+#         detected+=1
+# print(f"total: {total}, detected: {detected}")
+#
+for image_path in TEST_IMAGE_PATHS:
+    print(image_path)
+    show_inference(detection_model, image_path, 17)
