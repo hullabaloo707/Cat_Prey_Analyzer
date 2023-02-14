@@ -32,8 +32,6 @@ def load_model(model_name):
         cache_dir=os.path.join("models","downloaded_models"))
 
     model_dir = pathlib.Path(model_dir)/"saved_model"
-    print(model_dir)
-    exit(1)
     model = tf.saved_model.load(str(model_dir))
     model = model.signatures['serving_default']
 
