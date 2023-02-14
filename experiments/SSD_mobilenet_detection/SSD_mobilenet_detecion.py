@@ -28,10 +28,12 @@ def load_model(model_name):
     model_dir = tf.keras.utils.get_file(
         fname=model_name,
         origin=base_url + model_file,
-        untar=True)
+        untar=True,
+        cache_dir=os.path.join("models","downloaded_models"))
 
     model_dir = pathlib.Path(model_dir)/"saved_model"
-
+    print(model_dir)
+    exit(1)
     model = tf.saved_model.load(str(model_dir))
     model = model.signatures['serving_default']
 
@@ -74,12 +76,7 @@ def show_inference(model, image_path,class_id):
     boxes = np.array(boxes)
     classes = np.array(classes)
     scores = np.array(scores)
-    print(classes)
-    print(boxes)
 
-    print(category_index)
-
-    return
     vis_util.visualize_boxes_and_labels_on_image_array(
         image_np,
         boxes,
@@ -120,14 +117,14 @@ detection_model = load_model(model_name)
 
 total=0
 detected=0
-# for image_path in TEST_IMAGE_PATHS:
-#     total+=1
-#     print(image_path)
-#
-#     if is_class(detection_model, image_path, 17):
-#         detected+=1
-# print(f"total: {total}, detected: {detected}")
-#
 for image_path in TEST_IMAGE_PATHS:
+    total+=1
     print(image_path)
-    show_inference(detection_model, image_path, 17)
+
+    if is_class(detection_model, image_path, 17):
+        detected+=1
+print(f"total: {total}, detected: {detected}")
+#
+# for image_path in TEST_IMAGE_PATHS:
+#     print(image_path)
+#     show_inference(detection_model, image_path, 17)

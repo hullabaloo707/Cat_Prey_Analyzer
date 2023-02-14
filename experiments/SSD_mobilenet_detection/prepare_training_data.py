@@ -1,3 +1,16 @@
+"""Naval Fate.
+
+Usage:
+  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records]
+
+Options:
+  -h --help     Show this screen.
+
+"""
+from docopt import docopt
+from object_detection.utils import config_util
+
+import tqdm
 import tensorflow as tf
 from PIL import Image
 
@@ -8,7 +21,15 @@ from object_detection.utils import visualization_utils as vis_util
 
 import math
 
-def create_tf_example(encoded_image_data,image_height,image_width,file_name,bb_x_min,bb_y_min,bb_x_max,bb_y_max,class_text,class_value):
+
+category_index = {1: {'id': 1, 'name': 'cat'}}
+
+record_file_train = 'data/images_train.tfrecords'
+directory_train = "data/cat_data_set"
+record_file_eval = 'data/images_eval.tfrecords'
+directory_eval = "data/cat_data_set_eval"
+
+def create_tf_example(file,image_height,image_width,file_name,bb_x_min,bb_y_min,bb_x_max,bb_y_max,class_text,class_value):
     """Creates a tf.Example proto from sample cat image.
 
    Args:
@@ -18,10 +39,15 @@ def create_tf_example(encoded_image_data,image_height,image_width,file_name,bb_x
      example: The created tf.Example.
    """
 
+    with tf.io.gfile.GFile(file, 'rb') as fid:
+        encoded_image_data = fid.read()
+
     # height = 1032.0
     # width = 1200.0
     # filename = 'example_cat.jpg'
-    image_format = b'jpg'
+    image_format = b'JPEG'
+    colorspace = b'RGB'
+    channels = 3
 
     xmins = [bb_x_min / image_width]
     xmaxs = [bb_x_max / image_width]
@@ -33,9 +59,11 @@ def create_tf_example(encoded_image_data,image_height,image_width,file_name,bb_x
     tf_example = tf.train.Example(features=tf.train.Features(feature={
         'image/height': dataset_util.int64_feature(image_height),
         'image/width': dataset_util.int64_feature(image_width),
+        'image/colorspace': dataset_util.bytes_feature(colorspace),
+        'image/channels': dataset_util.int64_feature(channels),
         'image/filename': dataset_util.bytes_feature(bytes(file_name, encoding='utf-8')),
         'image/source_id': dataset_util.bytes_feature(bytes(file_name, encoding='utf-8')),
-        'image/encoded': dataset_util.bytes_feature(encoded_image_data.tobytes()),
+        'image/encoded': dataset_util.bytes_feature(encoded_image_data),
         'image/format': dataset_util.bytes_feature(image_format),
         'image/object/bbox/xmin': dataset_util.float_list_feature(xmins),
         'image/object/bbox/xmax': dataset_util.float_list_feature(xmaxs),
@@ -47,32 +75,24 @@ def create_tf_example(encoded_image_data,image_height,image_width,file_name,bb_x
     return tf_example
 
 
-def main():
+def create_tf_records(arg,directory,record_file):
 
-    record_file = 'images.tfrecords'
     with tf.io.TFRecordWriter(record_file) as writer:
-
-
-        directory = "data/cat_data_set"
-        counter = 0
-        for i, filename in enumerate(os.listdir("data/cat_data_set")):
+        for i, filename in enumerate(tqdm.tqdm(os.listdir(directory))):
             file = os.path.join(directory, filename)
-            print(file)
-
             if filename.endswith(".jpg"):
+                # print(file)
                 image_np = np.array(Image.open(file))
                 filename_annotation = filename + ".cat"
-                print(filename_annotation)
+                file_annotation=os.path.join(directory, filename_annotation)
+                if not os.path.exists(file_annotation):
+                    print(f"skip: {filename}")
+                    continue
 
                 with open(os.path.join(directory, filename_annotation), "r") as features_file:
                     annotations = features_file.readline().rstrip()
-                    print(annotations)
-
                     annotations = annotations.split(" ")
-                    print(annotations)
-
                     annotations = [int(i) for i in annotations]
-                    print(annotations)
 
                     left_eye = np.array([annotations[2],annotations[1]])
                     right_eye = np.array([annotations[4],annotations[3]])
@@ -82,11 +102,8 @@ def main():
 
                     eye_vec = np.subtract(left_eye,right_eye)
                     distance_eyes = math.sqrt(math.pow(eye_vec[0],2)+math.pow(eye_vec[1],2))
-                    boxes = np.array([np.hstack((left_eye,right_eye))])
-                    print(left_ear)
-                    print(left_eye)
-
-                    boxes = np.array([np.hstack((left_eye,right_eye))])
+                    # print(left_ear)
+                    # print(left_eye)
 
                     image_y_max = image_np.shape[0]
                     image_x_max = image_np.shape[1]
@@ -101,20 +118,19 @@ def main():
 
                     boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
 
-
-                    print(boxes)
+                    # print(boxes)
                     classes = np.array([1])
-                    category_index = {1: {'id': 1, 'name': 'cat'}}
                     vis_util.visualize_boxes_and_labels_on_image_array(
                         image_np,
                         boxes,
                         classes,
                         None,
                         category_index)
-        # writer = tf.python_io.TFRecordWriter(FLAGS.output_path)
+                # writer = tf.python_io.TFRecordWriter(FLAGS.output_path)
+                if arg['--show_images']:
+                    Image.fromarray(image_np).show()
 
-                Image.fromarray(image_np).show()
-                tf_example = create_tf_example(image_np,
+                tf_example = create_tf_example(file,
                                                image_y_max,
                                                image_x_max,
                                                filename,
@@ -128,17 +144,79 @@ def main():
                 writer.write(tf_example.SerializeToString())
 
 
+                if arg['--number_pictures']:
+                    if i > int(arg['--number_pictures']):
+                        return
+    writer.close()
 
-                if i > 13:
-                    return
-    # TODO(user): Write code to read in your dataset to examples variable
 
-    # for example in examples:
-    #     tf_example = create_tf_example(example)
-    #     writer.write(tf_example.SerializeToString())
+def main(arg):
 
-    # writer.close()
+    if arg["--create_tf_records"]:
+        create_tf_records(arg,directory_train,record_file_train)
+        create_tf_records(arg,directory_eval,record_file_eval)
 
+    label_map_file = os.path.join("models","my_ssd_mobnet","label_map.pbtxt")
+    with open(label_map_file, 'w') as f:
+        for key, value in category_index.items():
+            f.write('item { \n')
+            f.write('\tname:\'{}\'\n'.format(value['name']))
+            f.write('\tid:{}\n'.format(value['id']))
+            f.write('}\n')
+
+    from object_detection.utils import config_util
+    from object_detection.protos import pipeline_pb2
+    from google.protobuf import text_format
+    config_file_path = os.path.join('models', "my_ssd_mobnet", 'pipeline.config')
+    # config = config_util.get_configs_from_pipeline_file(config_file_path)
+    # print(config)
+    pipeline_config = pipeline_pb2.TrainEvalPipelineConfig()
+    with tf.io.gfile.GFile(config_file_path, "r") as f:
+        proto_str = f.read()
+        text_format.Merge(proto_str, pipeline_config)
+
+    check_point_path = os.path.abspath(os.path.join("models","downloaded_models","datasets","ssd_mobilenet_v2_320x320_coco17_tpu-8","checkpoint",'ckpt-0'))
+    pipeline_config.model.ssd.num_classes = len(category_index.items())
+    pipeline_config.train_config.batch_size = 4
+    pipeline_config.train_config.fine_tune_checkpoint = check_point_path
+    pipeline_config.train_config.fine_tune_checkpoint_type = "detection"
+    pipeline_config.train_input_reader.label_map_path= label_map_file
+    pipeline_config.train_input_reader.tf_record_input_reader.input_path[:] = [record_file_train]
+    pipeline_config.eval_input_reader[0].label_map_path = label_map_file
+    pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
+
+    config_text = text_format.MessageToString(pipeline_config)
+    print(config_text)
+    with tf.io.gfile.GFile(config_file_path, "wb") as f:
+        f.write(config_text)
+
+    TRAINING_SCRIPT = os.path.join("models", 'research', 'object_detection', 'model_main_tf2.py')
+
+    command = "python {} --model_dir={} --pipeline_config_path={} --num_train_steps=2000".format(TRAINING_SCRIPT, os.path.join("models","my_ssd_mobnet"),config_file_path)
+    print(command)
+
+
+def check_jpg(directoy):
+    from pathlib import Path
+    import imghdr
+
+    data_dir = directoy
+    image_extensions = [".png", ".jpg"]  # add there all your images file extensions
+
+    img_type_accepted_by_tf = ["bmp", "gif", "jpeg", "png"]
+    for filepath in Path(data_dir).rglob("*"):
+        if filepath.suffix.lower() in image_extensions:
+            img_type = imghdr.what(filepath)
+            if img_type is None:
+                print(f"{filepath} is not an image")
+            elif img_type not in img_type_accepted_by_tf:
+                print(f"{filepath} is a {img_type}, not accepted by TensorFlow")
 
 if __name__ == '__main__':
-    main()
+
+    arguments = docopt(__doc__, version='0.0.0')
+    print(arguments)
+    check_jpg("data/cat_data_set_eval")
+    check_jpg("data/cat_data_set")
+
+    main(arguments)
