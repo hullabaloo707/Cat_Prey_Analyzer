@@ -156,6 +156,8 @@ def create_tf_records(arg,directory,record_file):
                         return
     writer.close()
 
+# docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd)/experiments/SSD_mobilenet_detection --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu python models/research/object_detection/model_main_tf2.py --model_dir=models/my_ssd_mobnet --pipeline_config_path=models/my_ssd_mobnet/pipeline.config --num_train_steps=2000
+# docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c "source venv/bin/activate && cd experiments/SSD_mobilenet_detection && python models/research/object_detection/model_main_tf2.py --model_dir=models/my_ssd_mobnet --pipeline_config_path=models/my_ssd_mobnet/pipeline.config --num_train_steps=2000"
 @tf.function
 def detect_fn(detection_model,image):
     # Load pipeline config and build a detection model
@@ -169,7 +171,7 @@ def main(arg):
     if arg["--detect"]:
         from object_detection.utils import config_util
 
-        image_path = os.path.join("data","cat_data_set_eval","00000001_012.jpg")
+        image_path = os.path.join("data","cat_data_set_eval","00000001_008.jpg")
         configs = config_util.get_configs_from_pipeline_file(config_file_path)
         detection_model = model_builder.build(model_config=configs['model'], is_training=False)
 
@@ -186,6 +188,7 @@ def main(arg):
         detections = detect_fn(detection_model,input_tensor)
 
         num_detections = int(detections.pop('num_detections'))
+        # print(detections)
         detections = {key: value[0, :num_detections].numpy()
                       for key, value in detections.items()}
         detections['num_detections'] = num_detections
@@ -204,7 +207,7 @@ def main(arg):
             category_index,
             use_normalized_coordinates=True,
             max_boxes_to_draw=5,
-            min_score_thresh=.8,
+            min_score_thresh=.5,
             agnostic_mode=False)
 
         plt.imshow(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB))
@@ -237,7 +240,7 @@ def main(arg):
 
     check_point_path = os.path.abspath(os.path.join("models","downloaded_models","datasets","ssd_mobilenet_v2_320x320_coco17_tpu-8","checkpoint",'ckpt-0'))
     pipeline_config.model.ssd.num_classes = len(category_index.items())
-    pipeline_config.train_config.batch_size = 4 # good with multiple of 8
+    pipeline_config.train_config.batch_size = 8 # good with multiple of 8
     pipeline_config.train_config.fine_tune_checkpoint = check_point_path
     pipeline_config.train_config.fine_tune_checkpoint_type = "detection"
     pipeline_config.train_input_reader.label_map_path= label_map_file
@@ -245,9 +248,9 @@ def main(arg):
     pipeline_config.eval_input_reader[0].label_map_path = label_map_file
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
-    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-3
-    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-5
-
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-2
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-3
+    pipeline_config.train_config.max_number_of_boxes = 1 # orginal 100
     # test with use_dropout
     # learning_rate_base 10e-3
     # warmup_learning_rate = 0
@@ -267,6 +270,30 @@ def main(arg):
     print(command)
 
 
+# INFO:tensorflow:{'Loss/classification_loss': 2.2574234,
+#                  'Loss/localization_loss': 0.5220827,
+#                  'Loss/regularization_loss': 0.085143425,
+#                  'Loss/total_loss': 2.8646493,
+#                  'learning_rate': 0.000145}
+#
+# I0215 13:02:16.783209 140572399961920 model_lib_v2.py:705] Step 700 per-step time 0.859s
+# INFO:tensorflow:{'Loss/classification_loss': 0.1964774,
+# 'Loss/localization_loss': 0.28343034,
+# 'Loss/regularization_loss': 0.08516403,
+# 'Loss/total_loss': 0.56507176,
+# 'learning_rate': 0.00041500002}
+# I0215 13:22:38.758822 140572399961920 model_lib_v2.py:705] Step 2100 per-step time 0.871s
+# INFO:tensorflow:{'Loss/classification_loss': 0.04290723,
+# 'Loss/localization_loss': 0.0210552,
+# 'Loss/regularization_loss': 0.085125566,
+# 'Loss/total_loss': 0.149088,
+# 'learning_rate': 0.0009999893}
+# I0215 12:42:11.509295 140701104416576 model_lib_v2.py:705] Step 3900 per-step time 0.200s
+# INFO:tensorflow:{'Loss/classification_loss': 0.02756812,
+# 'Loss/localization_loss': 0.01577053,
+# 'Loss/regularization_loss': 0.08503012,
+# 'Loss/total_loss': 0.12836877,
+# 'learning_rate': 0.000996139}
 
 
 def check_jpg(directoy):
