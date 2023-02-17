@@ -1,7 +1,7 @@
 """Naval Fate.
 
 Usage:
-  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --detect]
+  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --detect][ --count_cats]
 
 Options:
   -h --help     Show this screen.
@@ -25,6 +25,7 @@ from object_detection.utils import visualization_utils as vis_util
 
 import math
 
+import cv2
 
 category_index = {1: {'id': 1, 'name': 'cat'}}
 
@@ -166,48 +167,84 @@ def detect_fn(detection_model,image):
     detections = detection_model.postprocess(prediction_dict, shapes)
     return detections
 
+
+def load_model_from_checkpoints():
+    from object_detection.utils import config_util
+
+    configs = config_util.get_configs_from_pipeline_file(config_file_path)
+    detection_model = model_builder.build(model_config=configs['model'], is_training=False)
+
+    # Restore checkpoint
+    ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
+    ckpt.restore(os.path.join(my_checkpoints, 'ckpt-50')).expect_partial()
+    return detection_model
+
+
+def convert_and_filter_detections(detections,minimmum_detection_score):
+    num_detections = int(detections.pop('num_detections'))
+    # print(detections)
+    detections = {key: value[0, :num_detections].numpy()
+                  for key, value in detections.items()}
+    detections['num_detections'] = num_detections
+    label_id_offset = 1
+    detections['detection_classes'] = detections['detection_classes'].astype(np.int64) +label_id_offset
+
+    print(detections["detection_scores"])
+    print(detections["detection_classes"])
+
+    detections_filtered = {}
+    for key, values in detections.items():
+        if key == 'num_detections':
+            continue
+        detections_filtered[key] = np.array([v for (i,v) in enumerate(values) if detections["detection_scores"][i] > minimmum_detection_score])
+
+    detections_filtered["num_detections"] = len(detections["detection_scores"])
+    return detections_filtered
+
+def is_class(model, image_path,class_id):
+
+    img = cv2.imread(os.path.abspath(image_path))
+    image_np = np.array(img)
+
+    input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
+    detections = detect_fn(model,input_tensor)
+
+    minimmum_detection_score = 0.5
+    detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
+
+    for i,x in enumerate(detections_filtered['detection_classes']):
+        if x==class_id:
+            return True
+
 def main(arg):
 
     if arg["--detect"]:
-        from object_detection.utils import config_util
 
-        image_path = os.path.join("data","cat_data_set_eval","00000001_008.jpg")
-        configs = config_util.get_configs_from_pipeline_file(config_file_path)
-        detection_model = model_builder.build(model_config=configs['model'], is_training=False)
-
-        # Restore checkpoint
-        ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
-        ckpt.restore(os.path.join(my_checkpoints, 'ckpt-3')).expect_partial()
-        import cv2
         from matplotlib import pyplot as plt
-
+        image_path = os.path.join("data","cat_data_set_eval","00000005_000.jpg")
+        image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
+        detection_model = load_model_from_checkpoints()
         img = cv2.imread(image_path)
         image_np = np.array(img)
 
         input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
         detections = detect_fn(detection_model,input_tensor)
 
-        num_detections = int(detections.pop('num_detections'))
-        # print(detections)
-        detections = {key: value[0, :num_detections].numpy()
-                      for key, value in detections.items()}
-        detections['num_detections'] = num_detections
-
+        minimmum_detection_score = 0.5
+        detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
+        print(detections_filtered)
         # detection_classes should be ints.
-        detections['detection_classes'] = detections['detection_classes'].astype(np.int64)
 
-        label_id_offset = 1
         image_np_with_detections = image_np.copy()
-
         viz_utils.visualize_boxes_and_labels_on_image_array(
             image_np_with_detections,
-            detections['detection_boxes'],
-            detections['detection_classes']+label_id_offset,
-            detections['detection_scores'],
+            detections_filtered['detection_boxes'],
+            detections_filtered['detection_classes'],
+            detections_filtered['detection_scores'],
             category_index,
             use_normalized_coordinates=True,
             max_boxes_to_draw=5,
-            min_score_thresh=.5,
+            min_score_thresh=minimmum_detection_score,
             agnostic_mode=False)
 
         plt.imshow(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB))
@@ -215,6 +252,30 @@ def main(arg):
         plt.savefig("mygraph.png")
         return
 
+
+    if arg["--count_cats"]:
+        import pathlib
+
+        PATH_TO_TEST_IMAGES_DIR = pathlib.Path('../../debug/input/') #models/research/object_detection/test_images
+        TEST_IMAGE_PATHS = sorted(list(PATH_TO_TEST_IMAGES_DIR.glob("*.jpg")))
+        detection_model = load_model_from_checkpoints()
+        total=0
+        detected=0
+        for image_path in TEST_IMAGE_PATHS:
+            total+=1
+            print(image_path)
+
+            if is_class(detection_model, image_path, 1):
+                detected+=1
+        print(f"total: {total}, detected: {detected}")
+        return
+
+
+        # detection_classes should be ints.
+
+        label_id_offset = 1
+
+        return
 
     if arg["--create_tf_records"]:
         create_tf_records(arg,directory_train,record_file_train)
@@ -250,7 +311,8 @@ def main(arg):
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
     pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-2
     pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-3
-    pipeline_config.train_config.max_number_of_boxes = 1 # orginal 100
+    pipeline_config.train_config.max_number_of_boxes = 100 # orginal 100
+    pipeline_config.model.ssd.box_predictor.convolutional_box_predictor.use_dropout = True # orginal False
     # test with use_dropout
     # learning_rate_base 10e-3
     # warmup_learning_rate = 0
@@ -262,12 +324,16 @@ def main(arg):
 
     TRAINING_SCRIPT = os.path.join("models", 'research', 'object_detection', 'model_main_tf2.py')
 
-    command = "python {} --model_dir={} --pipeline_config_path={} --num_train_steps=2000".format(TRAINING_SCRIPT, my_checkpoints,config_file_path)
-    print(command)
+    command_clean_model = "rm -f models/my_ssd_mobnet/ckpt* && rm -f models/my_ssd_mobnet/checkpoint && rm -rf models/my_ssd_mobnet/train"
 
+    command = "python {} --model_dir={} --pipeline_config_path={} --num_train_steps=50000".format(TRAINING_SCRIPT, my_checkpoints,config_file_path)
+    gpu_docker_command = f"docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c \"source venv/bin/activate && cd experiments/SSD_mobilenet_detection && {command_clean_model} && {command}\""
 
-    command = "python {} --model_dir={} --pipeline_config_path={} --checkpoint_dir={}".format(TRAINING_SCRIPT, my_checkpoints,config_file_path, my_checkpoints)
-    print(command)
+    print(gpu_docker_command)
+
+    print("tensorboard --logdir=models/my_ssd_mobnet/train/")
+    # command = "python {} --model_dir={} --pipeline_config_path={} --checkpoint_dir={}".format(TRAINING_SCRIPT, my_checkpoints,config_file_path, my_checkpoints)
+    # print(gpu_docker_command)
 
 
 # INFO:tensorflow:{'Loss/classification_loss': 2.2574234,
