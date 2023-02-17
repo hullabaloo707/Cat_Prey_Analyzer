@@ -216,40 +216,46 @@ def is_class(model, image_path,class_id):
         if x==class_id:
             return True
 
+
+def show_detection(detection_model,image_path):
+    from matplotlib import pyplot as plt
+
+    img = cv2.imread(os.path.abspath(image_path))
+    image_np = np.array(img)
+
+    input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
+    detections = detect_fn(detection_model,input_tensor)
+
+    minimmum_detection_score = 0.5
+    detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
+    print(detections_filtered)
+    # detection_classes should be ints.
+
+    image_np_with_detections = image_np.copy()
+    viz_utils.visualize_boxes_and_labels_on_image_array(
+        image_np_with_detections,
+        detections_filtered['detection_boxes'],
+        detections_filtered['detection_classes'],
+        detections_filtered['detection_scores'],
+        category_index,
+        use_normalized_coordinates=True,
+        max_boxes_to_draw=5,
+        min_score_thresh=minimmum_detection_score,
+        agnostic_mode=False)
+
+    Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).show()
+    plt.show()
+    # plt.savefig("mygraph.png")
+
+
 def main(arg):
 
     if arg["--detect"]:
 
-        from matplotlib import pyplot as plt
         image_path = os.path.join("data","cat_data_set_eval","00000005_000.jpg")
         image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
         detection_model = load_model_from_checkpoints()
-        img = cv2.imread(image_path)
-        image_np = np.array(img)
-
-        input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
-        detections = detect_fn(detection_model,input_tensor)
-
-        minimmum_detection_score = 0.5
-        detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
-        print(detections_filtered)
-        # detection_classes should be ints.
-
-        image_np_with_detections = image_np.copy()
-        viz_utils.visualize_boxes_and_labels_on_image_array(
-            image_np_with_detections,
-            detections_filtered['detection_boxes'],
-            detections_filtered['detection_classes'],
-            detections_filtered['detection_scores'],
-            category_index,
-            use_normalized_coordinates=True,
-            max_boxes_to_draw=5,
-            min_score_thresh=minimmum_detection_score,
-            agnostic_mode=False)
-
-        plt.imshow(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB))
-        plt.show()
-        plt.savefig("mygraph.png")
+        show_detection(detection_model,image_path)
         return
 
 
@@ -267,6 +273,7 @@ def main(arg):
 
             if is_class(detection_model, image_path, 1):
                 detected+=1
+                # show_detection(detection_model,image_path)
         print(f"total: {total}, detected: {detected}")
         return
 
