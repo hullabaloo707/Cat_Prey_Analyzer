@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageDraw
 import os
 
 # Load the images
@@ -10,11 +10,20 @@ foreground = Image.open(mouse_image).convert("RGBA")
 
 # Get the size of the background image
 width, height = background.size
+width_mouse = int(width/10)
+height_mouse = int(height/10)
+
+# Create a circular mask
+mask = Image.new('L', (width_mouse, height_mouse), 0)
+draw = ImageDraw.Draw(mask)
+draw.ellipse((0, 0, width_mouse, height_mouse), fill=255)
 
 # Resize the foreground image to fit inside the background
-foreground = foreground.resize((int(width/10), int(height/10)))
+foreground = foreground.resize((width_mouse,height_mouse))
 foreground = foreground.rotate(45)
 
+foreground.putalpha(mask)
+im = Image.composite(im1, im2, mask)
 
 # Get the size of the foreground image
 fw, fh = foreground.size
