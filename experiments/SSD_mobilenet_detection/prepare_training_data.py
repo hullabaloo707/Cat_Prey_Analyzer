@@ -189,8 +189,6 @@ def convert_and_filter_detections(detections,minimmum_detection_score):
     label_id_offset = 1
     detections['detection_classes'] = detections['detection_classes'].astype(np.int64) +label_id_offset
 
-    print(detections["detection_scores"])
-    print(detections["detection_classes"])
 
     detections_filtered = {}
     for key, values in detections.items():
@@ -228,7 +226,6 @@ def show_detection(detection_model,image_path):
 
     minimmum_detection_score = 0.5
     detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
-    print(detections_filtered)
     # detection_classes should be ints.
 
     image_np_with_detections = image_np.copy()
@@ -262,7 +259,7 @@ def main(arg):
     if arg["--count_cats"]:
         import pathlib
 
-        PATH_TO_TEST_IMAGES_DIR = pathlib.Path('../../debug/input/') #models/research/object_detection/test_images
+        PATH_TO_TEST_IMAGES_DIR = pathlib.Path('../../debug/output/input_cropped') #models/research/object_detection/test_images
         TEST_IMAGE_PATHS = sorted(list(PATH_TO_TEST_IMAGES_DIR.glob("*.jpg")))
         detection_model = load_model_from_checkpoints()
         total=0
