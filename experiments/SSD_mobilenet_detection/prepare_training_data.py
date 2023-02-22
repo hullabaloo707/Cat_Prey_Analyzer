@@ -250,7 +250,7 @@ def main(arg):
     if arg["--detect"]:
 
         image_path = os.path.join("data","cat_data_set_eval","00000005_000.jpg")
-        image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
+        # image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
         detection_model = load_model_from_checkpoints()
         show_detection(detection_model,image_path)
         return
@@ -333,11 +333,17 @@ def main(arg):
     command = "python {} --model_dir={} --pipeline_config_path={} --num_train_steps=50000".format(TRAINING_SCRIPT, my_checkpoints,config_file_path)
     gpu_docker_command = f"docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c \"source venv/bin/activate && cd experiments/SSD_mobilenet_detection && {command_clean_model} && {command}\""
 
+    print("train")
     print(gpu_docker_command)
 
+    print("inspect")
     print("tensorboard --logdir=models/my_ssd_mobnet/train/")
-    # command = "python {} --model_dir={} --pipeline_config_path={} --checkpoint_dir={}".format(TRAINING_SCRIPT, my_checkpoints,config_file_path, my_checkpoints)
-    # print(gpu_docker_command)
+
+    print("eval")
+    command = "python {} --model_dir={} --pipeline_config_path={} --checkpoint_dir={}".format(TRAINING_SCRIPT, my_checkpoints,config_file_path, my_checkpoints)
+    gpu_docker_command = f"docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c \"source venv/bin/activate && cd experiments/SSD_mobilenet_detection && {command}\""
+
+    print(gpu_docker_command)
 
 
 # INFO:tensorflow:{'Loss/classification_loss': 2.2574234,
