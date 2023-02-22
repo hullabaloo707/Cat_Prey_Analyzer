@@ -303,9 +303,14 @@ def main(arg):
         proto_str = f.read()
         text_format.Merge(proto_str, pipeline_config)
 
+
+    batch_size=8
+    number_of_training_data=len(os.listdir(directory_train))/2
+    number_of_steps=int((number_of_training_data/batch_size) * 30)
+
     check_point_path = os.path.abspath(os.path.join("models","downloaded_models","datasets","ssd_mobilenet_v2_320x320_coco17_tpu-8","checkpoint",'ckpt-0'))
     pipeline_config.model.ssd.num_classes = len(category_index.items())
-    pipeline_config.train_config.batch_size = 8 # good with multiple of 8
+    pipeline_config.train_config.batch_size = batch_size # good with multiple of 8
     pipeline_config.train_config.fine_tune_checkpoint = check_point_path
     pipeline_config.train_config.fine_tune_checkpoint_type = "detection"
     pipeline_config.train_input_reader.label_map_path= label_map_file
@@ -313,10 +318,23 @@ def main(arg):
     pipeline_config.eval_input_reader[0].label_map_path = label_map_file
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
-    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-2
-    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-3
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-4
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-5
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.total_steps = number_of_steps
     pipeline_config.train_config.max_number_of_boxes = 100 # orginal 100
     pipeline_config.model.ssd.box_predictor.convolutional_box_predictor.use_dropout = True # orginal False
+
+    # RandomDistortColor
+    # https://stackoverflow.com/questions/44906317/what-are-possible-values-for-data-augmentation-options-in-the-tensorflow-object
+    # check for augmentation layer
+
+    # reduce lerning rate even more
+
+    # how to run evaluation in runtime
+
+    # iterations shoud be around 30-40 over the data set
+    # one step is showing batch_size images to the model
+
     # test with use_dropout
     # learning_rate_base 10e-3
     # warmup_learning_rate = 0
@@ -330,7 +348,7 @@ def main(arg):
 
     command_clean_model = "rm -f models/my_ssd_mobnet/ckpt* && rm -f models/my_ssd_mobnet/checkpoint && rm -rf models/my_ssd_mobnet/train"
 
-    command = "python {} --model_dir={} --pipeline_config_path={} --num_train_steps=50000".format(TRAINING_SCRIPT, my_checkpoints,config_file_path)
+    command = f"python {TRAINING_SCRIPT} --model_dir={my_checkpoints} --pipeline_config_path={config_file_path} --num_train_steps={number_of_steps}"
     gpu_docker_command = f"docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c \"source venv/bin/activate && cd experiments/SSD_mobilenet_detection && {command_clean_model} && {command}\""
 
     print("train")
