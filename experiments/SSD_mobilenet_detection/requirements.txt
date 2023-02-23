@@ -1,3 +1,4 @@
 pycocotools
-object_detection
+#object_detection
 tf_slim
+docopt

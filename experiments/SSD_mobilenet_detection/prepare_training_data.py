@@ -304,7 +304,7 @@ def main(arg):
         text_format.Merge(proto_str, pipeline_config)
 
 
-    batch_size=8
+    batch_size=32
     number_of_training_data=len(os.listdir(directory_train))/2
     number_of_steps=int((number_of_training_data/batch_size) * 30)
 
@@ -318,7 +318,7 @@ def main(arg):
     pipeline_config.eval_input_reader[0].label_map_path = label_map_file
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
     pipeline_config.eval_input_reader[0].tf_record_input_reader.input_path[:] = [record_file_eval]
-    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-4
+    pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 1e-3
     pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-5
     pipeline_config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.total_steps = number_of_steps
     pipeline_config.train_config.max_number_of_boxes = 100 # orginal 100
