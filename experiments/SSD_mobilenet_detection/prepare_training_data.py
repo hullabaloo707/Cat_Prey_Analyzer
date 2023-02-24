@@ -1,7 +1,7 @@
 """Naval Fate.
 
 Usage:
-  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --detect][ --count_cats]
+  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --create_ml_data_set][ --detect][ --count_cats]
 
 Options:
   -h --help     Show this screen.
@@ -18,21 +18,29 @@ import tqdm
 import tensorflow as tf
 from PIL import Image
 
+import json
+
 from object_detection.utils import dataset_util
 import numpy as np
 import os
 from object_detection.utils import visualization_utils as vis_util
 
 import math
+import shutil
 
 import cv2
 
 category_index = {1: {'id': 1, 'name': 'cat'}}
 
 record_file_train = 'data/images_train.tfrecords'
-directory_train = "data/cat_data_set"
 record_file_eval = 'data/images_eval.tfrecords'
+directory_train_original = "data/cat_orginal/cat_data_set"
+directory_eval_original = "data/cat_orginal/cat_data_set_eval"
+directory_train = "data/cat_data_set"
 directory_eval = "data/cat_data_set_eval"
+
+data_dir = "data"
+
 config_file_path = os.path.join('models', "my_ssd_mobnet", 'pipeline.config')
 my_checkpoints = os.path.join("models","my_ssd_mobnet")
 
@@ -82,79 +90,171 @@ def create_tf_example(file,image_height,image_width,file_name,bb_x_min,bb_y_min,
     }))
     return tf_example
 
+def bounding_box_xy_min_max_to_xy_wh(bb_x_min,bb_y_min,bb_x_max,bb_y_max):
+    x = (bb_x_max - bb_x_min)/2
+    y = (bb_y_max - bb_y_min)/2
+    w = (bb_x_max - bb_x_min)
+    h = (bb_y_max - bb_y_min)
+    return (x,y,w,h)
+
+def xy_wh_to_bounding_box_xy_min_max_to(x,y,w,h):
+
+    bb_x_min = x - w/2
+    bb_y_min = y - h/2
+
+    bb_x_max = x + w/2
+    bb_y_max = y + h/2
+    return (bb_x_min,bb_y_min,bb_x_max,bb_y_max)
+
+def create_cat_image_data_set(arg,input_directory):
+
+    output_dir = os.path.join(data_dir,os.path.basename(input_directory))
+    shutil.rmtree(output_dir)
+
+    ml_annotations = list()
+
+    for i, filename in enumerate(tqdm.tqdm(os.listdir(input_directory))):
+        file = os.path.join(input_directory, filename)
+        if filename.endswith(".jpg"):
+            image_np = np.array(Image.open(file))
+            filename_annotation = filename + ".cat"
+            file_annotation=os.path.join(input_directory, filename_annotation)
+            if not os.path.exists(file_annotation):
+                print(f"skip: {filename}")
+                continue
+
+            with open(os.path.join(input_directory, filename_annotation), "r") as features_file:
+                annotations = features_file.readline().rstrip()
+                annotations = annotations.split(" ")
+                annotations = [int(i) for i in annotations]
+
+                left_eye = np.array([annotations[2],annotations[1]])
+                right_eye = np.array([annotations[4],annotations[3]])
+                mouth = np.array([annotations[6],annotations[5]])
+                left_ear = np.array([annotations[10],annotations[9]])
+                right_ear = np.array([annotations[16],annotations[15]])
+
+                eye_vec = np.subtract(left_eye,right_eye)
+                distance_eyes = math.sqrt(math.pow(eye_vec[0],2)+math.pow(eye_vec[1],2))
+                # print(left_ear)
+                # print(left_eye)
+
+                image_y_max = image_np.shape[0]
+                image_x_max = image_np.shape[1]
+                y_min = int(min(left_eye[0],right_eye[0],mouth[0],left_ear[0],right_ear[0]) - 0.3*distance_eyes)
+                x_min = int(min(left_eye[1],right_eye[1],mouth[1],left_ear[1],right_ear[1])- 0.3*distance_eyes)
+                y_max = int(max(left_eye[0],right_eye[0],mouth[0],left_ear[0],right_ear[0])+ 0.8 * distance_eyes)
+                x_max = int(max(left_eye[1],right_eye[1],mouth[1],left_ear[1],right_ear[1])+ 0.3*distance_eyes)
+                y_min = max(y_min,0)
+                x_min = max(x_min,0)
+                y_max = min(y_max,image_y_max)
+                x_max = min(x_max,image_x_max)
+
+                (x,y,w,h) = bounding_box_xy_min_max_to_xy_wh(x_min,y_min,x_max,y_max)
+
+                bounding_box = dict()
+                bounding_box["label"] = "cat"
+                bounding_box["coordinates"] = {"y": y,"x": x, "width": w, "height": h}
+
+                os.makedirs(output_dir, exist_ok=True)
+                shutil.copyfile(file, os.path.join(output_dir,filename))
+                a = dict()
+                a["image"] = filename
+                a["annotations"] = bounding_box
+                ml_annotations.append(a)
+
+
+    
+            # writer = tf.python_io.TFRecordWriter(FLAGS.output_path)
+            if arg['--show_images']:
+                boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
+
+                # print(boxes)
+                classes = np.array([1])
+                vis_util.visualize_boxes_and_labels_on_image_array(
+                    image_np,
+                    boxes,
+                    classes,
+                    None,
+                    category_index)
+                Image.fromarray(image_np).save(os.path.join("tmp",filename))
+
+
+
+            if arg['--number_pictures']:
+                if i > int(arg['--number_pictures']):
+                    break
+    import json
+    with open(os.path.join(output_dir,'ml_annotations.json'), 'w') as outfile:
+        json.dump(ml_annotations, outfile,indent=2)
+    
 
 def create_tf_records(arg,directory,record_file):
 
+    ml_annotations_file = None
+    for file in os.listdir(directory):
+        if file.endswith(".json"):
+            ml_annotations_file = os.path.join(directory, file)
+
+    if not ml_annotations_file:
+        raise Exception("no ml_annotations_file found!")
+    
+    with open(ml_annotations_file) as f:
+        ml_annotations = json.load(f)
+
+    print(len(ml_annotations))
     with tf.io.TFRecordWriter(record_file) as writer:
-        for i, filename in enumerate(tqdm.tqdm(os.listdir(directory))):
-            file = os.path.join(directory, filename)
-            if filename.endswith(".jpg"):
-                # print(file)
-                image_np = np.array(Image.open(file))
-                filename_annotation = filename + ".cat"
-                file_annotation=os.path.join(directory, filename_annotation)
-                if not os.path.exists(file_annotation):
-                    print(f"skip: {filename}")
-                    continue
-
-                with open(os.path.join(directory, filename_annotation), "r") as features_file:
-                    annotations = features_file.readline().rstrip()
-                    annotations = annotations.split(" ")
-                    annotations = [int(i) for i in annotations]
-
-                    left_eye = np.array([annotations[2],annotations[1]])
-                    right_eye = np.array([annotations[4],annotations[3]])
-                    mouth = np.array([annotations[6],annotations[5]])
-                    left_ear = np.array([annotations[10],annotations[9]])
-                    right_ear = np.array([annotations[16],annotations[15]])
-
-                    eye_vec = np.subtract(left_eye,right_eye)
-                    distance_eyes = math.sqrt(math.pow(eye_vec[0],2)+math.pow(eye_vec[1],2))
-                    # print(left_ear)
-                    # print(left_eye)
-
-                    image_y_max = image_np.shape[0]
-                    image_x_max = image_np.shape[1]
-                    y_min = int(min(left_eye[0],right_eye[0],mouth[0],left_ear[0],right_ear[0]) - 0.3*distance_eyes)
-                    x_min = int(min(left_eye[1],right_eye[1],mouth[1],left_ear[1],right_ear[1])- 0.3*distance_eyes)
-                    y_max = int(max(left_eye[0],right_eye[0],mouth[0],left_ear[0],right_ear[0])+ 0.8 * distance_eyes)
-                    x_max = int(max(left_eye[1],right_eye[1],mouth[1],left_ear[1],right_ear[1])+ 0.3*distance_eyes)
-                    y_min = max(y_min,0)
-                    x_min = max(x_min,0)
-                    y_max = min(y_max,image_y_max)
-                    x_max = min(x_max,image_x_max)
-
-                    boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
-
-                    # print(boxes)
-                    classes = np.array([1])
-                    vis_util.visualize_boxes_and_labels_on_image_array(
-                        image_np,
-                        boxes,
-                        classes,
-                        None,
-                        category_index)
-                # writer = tf.python_io.TFRecordWriter(FLAGS.output_path)
-                if arg['--show_images']:
-                    Image.fromarray(image_np).show()
-
-                tf_example = create_tf_example(file,
-                                               image_y_max,
-                                               image_x_max,
-                                               filename,
-                                               x_min,
-                                               y_min,
-                                               x_max,
-                                               y_max,
-                                               "cat",
-                                               1
-                                               )
-                writer.write(tf_example.SerializeToString())
+        for annotation in tqdm.tqdm(ml_annotations):
 
 
-                if arg['--number_pictures']:
-                    if i > int(arg['--number_pictures']):
-                        return
+            file = os.path.join(directory, annotation["image"])
+            if not os.path.exists(file):
+                print(f"skip: {file}")
+                continue
+
+            image_np = np.array(Image.open(file))
+            image_y_max = image_np.shape[0]
+            image_x_max = image_np.shape[1]
+            (x_min,y_min,x_max,y_max) = xy_wh_to_bounding_box_xy_min_max_to(annotation["annotations"]["coordinates"]["x"],
+                                                                                        annotation["annotations"]["coordinates"]["y"],
+                                                                                        annotation["annotations"]["coordinates"]["width"],
+                                                                                        annotation["annotations"]["coordinates"]["height"])
+
+            class_value = None
+            for key, value in category_index.items():
+                if(value["name"] == annotation["annotations"]["label"]):
+                    class_value = key
+
+            assert(class_value is not None)
+
+            tf_example = create_tf_example(file,
+                                            image_y_max,
+                                            image_x_max,
+                                            annotation["image"],
+                                            x_min,
+                                            y_min,
+                                            x_max,
+                                            y_max,
+                                            annotation["annotations"]["label"],
+                                            class_value
+                                            )
+            writer.write(tf_example.SerializeToString())
+
+            if arg['--show_images']:
+                print(os.path.join("tmp",os.path.basename(annotation["image"])))
+                boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
+
+                # print(boxes)
+                classes = np.array([1])
+                vis_util.visualize_boxes_and_labels_on_image_array(
+                    image_np,
+                    boxes,
+                    classes,
+                    None,
+                    category_index)
+                Image.fromarray(image_np).save(os.path.join("tmp",os.path.basename(annotation["image"])))
+
+
     writer.close()
 
 # docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd)/experiments/SSD_mobilenet_detection --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu python models/research/object_detection/model_main_tf2.py --model_dir=models/my_ssd_mobnet --pipeline_config_path=models/my_ssd_mobnet/pipeline.config --num_train_steps=2000
@@ -176,7 +276,7 @@ def load_model_from_checkpoints():
 
     # Restore checkpoint
     ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
-    ckpt.restore(os.path.join(my_checkpoints, 'ckpt-50')).expect_partial()
+    ckpt.restore(os.path.join(my_checkpoints, 'ckpt-10')).expect_partial()
     return detection_model
 
 
@@ -240,16 +340,20 @@ def show_detection(detection_model,image_path):
         min_score_thresh=minimmum_detection_score,
         agnostic_mode=False)
 
-    Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).show()
-    plt.show()
-    # plt.savefig("mygraph.png")
+    Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).save(os.path.join("tmp",os.path.basename(image_path)))
 
 
 def main(arg):
+    if arg["--show_images"]:
+        os.makedirs("tmp", exist_ok=True)
+
+        shutil.rmtree("tmp")
+        os.makedirs("tmp", exist_ok=True)
+
 
     if arg["--detect"]:
 
-        image_path = os.path.join("data","cat_data_set_eval","00000005_000.jpg")
+        image_path = os.path.join("data","cat_orginal","cat_data_set_eval","00000005_000.jpg")
         # image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
         detection_model = load_model_from_checkpoints()
         show_detection(detection_model,image_path)
@@ -270,7 +374,9 @@ def main(arg):
 
             if is_class(detection_model, image_path, 1):
                 detected+=1
-                # show_detection(detection_model,image_path)
+            
+            if arg["--show_images"]:
+                show_detection(detection_model,image_path)
         print(f"total: {total}, detected: {detected}")
         return
 
@@ -280,6 +386,10 @@ def main(arg):
         label_id_offset = 1
 
         return
+
+    if arg["--create_ml_data_set"]:
+        create_cat_image_data_set(arg,directory_train_original)
+        create_cat_image_data_set(arg,directory_eval_original)
 
     if arg["--create_tf_records"]:
         create_tf_records(arg,directory_train,record_file_train)
@@ -305,7 +415,7 @@ def main(arg):
 
 
     batch_size=32
-    number_of_training_data=len(os.listdir(directory_train))/2
+    number_of_training_data=len(os.listdir(directory_train_original))/2
     number_of_steps=int((number_of_training_data/batch_size) * 30)
 
     check_point_path = os.path.abspath(os.path.join("models","downloaded_models","datasets","ssd_mobilenet_v2_320x320_coco17_tpu-8","checkpoint",'ckpt-0'))
@@ -340,7 +450,7 @@ def main(arg):
     # warmup_learning_rate = 0
     # momentum_optimizer_value == friction
     config_text = text_format.MessageToString(pipeline_config)
-    print(config_text)
+    #print(config_text)
     with tf.io.gfile.GFile(config_file_path, "wb") as f:
         f.write(config_text)
 
@@ -410,7 +520,7 @@ if __name__ == '__main__':
 
     arguments = docopt(__doc__, version='0.0.0')
     print(arguments)
-    check_jpg("data/cat_data_set_eval")
-    check_jpg("data/cat_data_set")
+    check_jpg("data/cat_orginal/cat_data_set_eval")
+    check_jpg("data/cat_orginal/cat_data_set")
 
     main(arguments)
