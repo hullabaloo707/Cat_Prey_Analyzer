@@ -109,7 +109,9 @@ def xy_wh_to_bounding_box_xy_min_max_to(x,y,w,h):
 def create_cat_image_data_set(arg,input_directory):
 
     output_dir = os.path.join(data_dir,os.path.basename(input_directory))
+    os.makedirs(output_dir, exist_ok=True)
     shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     ml_annotations = list()
 
@@ -156,12 +158,45 @@ def create_cat_image_data_set(arg,input_directory):
                 bounding_box["label"] = "cat"
                 bounding_box["coordinates"] = {"y": y,"x": x, "width": w, "height": h}
 
-                os.makedirs(output_dir, exist_ok=True)
-                shutil.copyfile(file, os.path.join(output_dir,filename))
                 a = dict()
                 a["image"] = filename
                 a["annotations"] = bounding_box
+
+                shutil.copyfile(file, os.path.join(output_dir,filename))
                 ml_annotations.append(a)
+
+                mouse_path = os.path.join("data","mouses_cropped","mouse.png")
+
+                background = Image.open(file).convert("RGBA")
+                foreground = Image.open(mouse_path).convert("RGBA")
+                foreground = foreground.rotate(-90,expand=True)
+
+
+                # Get the size of the background image
+                width, height = background.size
+                width_mouse = int(width/10)
+                height_mouse = int(height/10)
+
+                foreground = foreground.rotate(10,center=(int(foreground.size[0]/2),10),expand=True)
+
+                foreground.size
+                # Resize the foreground image to fit inside the background
+                foreground = foreground.resize((int(foreground.size[0]*distance_eyes/background.size[0]),int(foreground.size[1]*distance_eyes/background.size[1])))
+
+
+                # Get the size of the foreground image
+                fw, fh = foreground.size
+
+                # Calculate the position to place the foreground image in the center of the background
+                x = int((width - fw) / 2)
+                y = int((height - fh) / 2)
+
+                # Paste the foreground image onto the background
+                background.paste(foreground, (mouth[1]-int(foreground.size[0]/2),int(mouth[0]-distance_eyes/10)),foreground)
+
+                # Save the result
+                background = background.convert('RGB')
+                background.save(os.path.join(output_dir,f"{filename.split('.')[0]}-pray.jpg"))
 
 
     
@@ -520,7 +555,7 @@ if __name__ == '__main__':
 
     arguments = docopt(__doc__, version='0.0.0')
     print(arguments)
-    check_jpg("data/cat_orginal/cat_data_set_eval")
-    check_jpg("data/cat_orginal/cat_data_set")
+   # check_jpg("data/cat_orginal/cat_data_set_eval")
+  #  check_jpg("data/cat_orginal/cat_data_set")
 
     main(arguments)
