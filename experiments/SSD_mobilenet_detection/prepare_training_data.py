@@ -1,7 +1,7 @@
 """Naval Fate.
 
 Usage:
-  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --create_ml_data_set][ --detect][ --count_cats]
+  prepare_train_data.py [--number_pictures=<n> ][ --show_images][ --create_tf_records][ --create_ml_data_set][ --detect][ --count_cats][ --count_pray]
 
 Options:
   -h --help     Show this screen.
@@ -281,8 +281,7 @@ def create_cat_image_data_set(arg,input_directory):
         json.dump(ml_annotations, outfile,indent=2)
     
 
-def create_tf_records(arg,directory,record_file):
-
+def load_ml_annotation_file(directory):
     ml_annotations_file = None
     for file in os.listdir(directory):
         if file.endswith(".json"):
@@ -292,7 +291,12 @@ def create_tf_records(arg,directory,record_file):
         raise Exception("no ml_annotations_file found!")
     
     with open(ml_annotations_file) as f:
-        ml_annotations = json.load(f)
+        return json.load(f)
+
+
+def create_tf_records(arg,directory,record_file):
+
+    ml_annotations = load_ml_annotation_file(directory)
 
     print(len(ml_annotations))
     with tf.io.TFRecordWriter(record_file) as writer:
@@ -396,9 +400,8 @@ def convert_and_filter_detections(detections,minimmum_detection_score):
     detections_filtered["num_detections"] = len(detections["detection_scores"])
     return detections_filtered
 
-def is_class(model, image_path,class_ids):
+def is_class(model, img,class_ids):
 
-    img = cv2.imread(os.path.abspath(image_path))
     image_np = np.array(img)
 
     input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
@@ -412,10 +415,9 @@ def is_class(model, image_path,class_ids):
             return True
 
 
-def show_detection(detection_model,image_path):
+def show_detection(detection_model,img):
     from matplotlib import pyplot as plt
 
-    img = cv2.imread(os.path.abspath(image_path))
     image_np = np.array(img)
 
     input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
@@ -436,8 +438,40 @@ def show_detection(detection_model,image_path):
         max_boxes_to_draw=5,
         min_score_thresh=minimmum_detection_score,
         agnostic_mode=False)
+    
+    if hasattr(img, 'filename'):
+        Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).save(os.path.join("tmp",os.path.basename(img.filename)))
+    else:
+        Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).save(os.path.join("tmp",
+                                                                                                     f"{randint(0,10000000)}.jpg"))
 
-    Image.fromarray(cv2.cvtColor(image_np_with_detections, cv2.COLOR_BGR2RGB)).save(os.path.join("tmp",os.path.basename(image_path)))
+
+
+def image_section_with_highest_overlap_with_bb(img,annotation):
+
+    # Calculate the coordinates for the three cropped images
+    x1 = 0
+    y1 = 720 - 380
+    x2 = 380
+    y2 = 720
+    overlap = 90
+
+
+    (x_min,y_min,x_max,y_max) = xy_wh_to_bounding_box_xy_min_max_to(annotation["annotations"][0]["coordinates"]["x"],
+                                                                                        annotation["annotations"][0]["coordinates"]["y"],
+                                                                                        annotation["annotations"][0]["coordinates"]["width"],
+                                                                                        annotation["annotations"][0]["coordinates"]["height"])
+
+
+
+
+    # Crop and save the three images
+    for i in range(3):
+        if x_min > x1 and x_max < x2:
+            cropped = img.crop((x1, y1, x2, y2))
+            return cropped
+        x1 += (380 - overlap)
+        x2 += (380 - overlap)
 
 
 def main(arg):
@@ -453,28 +487,65 @@ def main(arg):
         image_path = os.path.join("data","cat_orginal","cat_data_set_eval","00000005_000.jpg")
         # image_path = os.path.join("../../debug/input/","11-20201012212045-01.jpg")
         detection_model = load_model_from_checkpoints()
-        show_detection(detection_model,image_path)
+        img = Image.open(image_path)
+        show_detection(detection_model,img)
         return
 
 
-    if arg["--count_cats"]:
+    if arg["--count_pray"]:
         import pathlib
 
         PATH_TO_TEST_IMAGES_DIR = pathlib.Path('../../debug/output/input_cropped') #models/research/object_detection/test_images
         TEST_IMAGE_PATHS = sorted(list(PATH_TO_TEST_IMAGES_DIR.glob("*.jpg")))
         detection_model = load_model_from_checkpoints()
         total=0
-        detected=0
+        detected_cats=0
+        detected_pray=0
         for image_path in TEST_IMAGE_PATHS:
             total+=1
             print(image_path)
 
-            if is_class(detection_model, image_path, [2]):
-                detected+=1
+            img = Image.open(image_path)
+
+            if is_class(detection_model, img, [1]):
+                detected_cats+=1
+
+            if is_class(detection_model, img, [2]):
+                detected_pray+=1
             
             if arg["--show_images"]:
-                show_detection(detection_model,image_path)
-        print(f"total: {total}, detected: {detected}")
+                img = Image.open(image_path)
+                show_detection(detection_model,img)
+        print(f"total: {total}, detected cats: {detected_cats}, detected pray: {detected_pray}")
+        return
+    
+    if arg["--count_cats"]:
+
+        cat_comming_path = "data/cat_comming"
+        ml_annotations = load_ml_annotation_file(cat_comming_path)
+
+        detection_model = load_model_from_checkpoints()
+        total=0
+        detected_cats=0
+        detected_pray=0
+
+        for annotation in ml_annotations:
+            image_path = os.path.join(cat_comming_path,annotation["image"])
+            print(image_path)
+
+            total+=1
+            img = Image.open(image_path)
+
+            image_section = image_section_with_highest_overlap_with_bb(img,annotation)
+            if is_class(detection_model, image_section, [1]):
+                detected_cats+=1
+
+            if is_class(detection_model, image_section, [2]):
+                detected_pray+=1
+            
+            if arg["--show_images"]:
+                show_detection(detection_model,image_section)
+        print(f"total: {total}, detected cats: {detected_cats}, detected pray: {detected_pray}")
         return
 
 
@@ -553,7 +624,7 @@ def main(arg):
 
     TRAINING_SCRIPT = os.path.join("models", 'research', 'object_detection', 'model_main_tf2.py')
 
-    command_clean_model = "rm -f models/my_ssd_mobnet/ckpt* && rm -f models/my_ssd_mobnet/checkpoint && rm -rf models/my_ssd_mobnet/train"
+    command_clean_model = "rm -f models/my_ssd_mobnet/ckpt* && rm -f models/my_ssd_mobnet/checkpoint && rm -rf models/my_ssd_mobnet/train && rm -rf models/my_ssd_mobnet/eval"
 
     command = f"python {TRAINING_SCRIPT} --model_dir={my_checkpoints} --pipeline_config_path={config_file_path} --num_train_steps={number_of_steps}"
     gpu_docker_command = f"docker run -p 8080:8888 -v $(pwd):$(pwd)  -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:gpu bash -c \"source venv/bin/activate && cd experiments/SSD_mobilenet_detection && {command_clean_model} && {command}\""
