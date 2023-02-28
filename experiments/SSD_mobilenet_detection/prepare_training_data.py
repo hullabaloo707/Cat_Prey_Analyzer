@@ -20,6 +20,8 @@ from PIL import Image
 
 import json
 
+from random import randint, uniform
+
 from object_detection.utils import dataset_util
 import numpy as np
 import os
@@ -30,7 +32,7 @@ import shutil
 
 import cv2
 
-category_index = {1: {'id': 1, 'name': 'cat'}}
+category_index = {1: {'id': 1, 'name': 'cat'},2: {'id': 2, 'name': 'cat_pray'}}
 
 record_file_train = 'data/images_train.tfrecords'
 record_file_eval = 'data/images_eval.tfrecords'
@@ -38,6 +40,9 @@ directory_train_original = "data/cat_orginal/cat_data_set"
 directory_eval_original = "data/cat_orginal/cat_data_set_eval"
 directory_train = "data/cat_data_set"
 directory_eval = "data/cat_data_set_eval"
+mouses_path = "data/mouses_cropped"
+
+
 
 data_dir = "data"
 
@@ -91,8 +96,8 @@ def create_tf_example(file,image_height,image_width,file_name,bb_x_min,bb_y_min,
     return tf_example
 
 def bounding_box_xy_min_max_to_xy_wh(bb_x_min,bb_y_min,bb_x_max,bb_y_max):
-    x = (bb_x_max - bb_x_min)/2
-    y = (bb_y_max - bb_y_min)/2
+    x = bb_x_min + (bb_x_max - bb_x_min)/2
+    y = bb_y_min + (bb_y_max - bb_y_min)/2
     w = (bb_x_max - bb_x_min)
     h = (bb_y_max - bb_y_min)
     return (x,y,w,h)
@@ -112,6 +117,8 @@ def create_cat_image_data_set(arg,input_directory):
     os.makedirs(output_dir, exist_ok=True)
     shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
+
+    list_of_mouses = os.listdir(mouses_path)
 
     ml_annotations = list()
 
@@ -151,6 +158,7 @@ def create_cat_image_data_set(arg,input_directory):
                 x_min = max(x_min,0)
                 y_max = min(y_max,image_y_max)
                 x_max = min(x_max,image_x_max)
+                boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
 
                 (x,y,w,h) = bounding_box_xy_min_max_to_xy_wh(x_min,y_min,x_max,y_max)
 
@@ -165,23 +173,35 @@ def create_cat_image_data_set(arg,input_directory):
                 shutil.copyfile(file, os.path.join(output_dir,filename))
                 ml_annotations.append(a)
 
-                mouse_path = os.path.join("data","mouses_cropped","mouse.png")
+                random_index = randint(0,len(list_of_mouses)-1)
+                mouse_path = os.path.join(mouses_path,list_of_mouses[random_index])
+
 
                 background = Image.open(file).convert("RGBA")
                 foreground = Image.open(mouse_path).convert("RGBA")
-                foreground = foreground.rotate(-90,expand=True)
+                #foreground = foreground.rotate(-90,expand=True)
 
+                # Get the bounding box for all non-transparent pixels
+                #bbox = foreground.getbbox()
+                # Crop the image using the bounding box
+                #foreground = foreground.crop(bbox)
 
                 # Get the size of the background image
                 width, height = background.size
                 width_mouse = int(width/10)
                 height_mouse = int(height/10)
+                mouse_scale = uniform(0.7,1.3)
+                mouse_scale = 1
+                scale = distance_eyes/background.size[0]
+                foreground = foreground.resize((int(mouse_scale*distance_eyes),int(mouse_scale*scale*background.size[1])))
 
-                foreground = foreground.rotate(10,center=(int(foreground.size[0]/2),10),expand=True)
+
+                rotation = randint(-50,50)
+               # rotation = 0
+                foreground = foreground.rotate(rotation,center=(int(foreground.size[0]/2),10),expand=True)
 
                 foreground.size
                 # Resize the foreground image to fit inside the background
-                foreground = foreground.resize((int(foreground.size[0]*distance_eyes/background.size[0]),int(foreground.size[1]*distance_eyes/background.size[1])))
 
 
                 # Get the size of the foreground image
@@ -192,17 +212,44 @@ def create_cat_image_data_set(arg,input_directory):
                 y = int((height - fh) / 2)
 
                 # Paste the foreground image onto the background
-                background.paste(foreground, (mouth[1]-int(foreground.size[0]/2),int(mouth[0]-distance_eyes/10)),foreground)
+                mouse_pic_x = int(mouth[1]-int(foreground.size[0]/2))
+                mouse_pic_y = int(mouth[0]-distance_eyes/10)
+                background.paste(foreground, (mouse_pic_x,mouse_pic_y),foreground)
+
+
+                y_min = int(min(y_min,mouse_pic_y))
+                x_min = int(min(x_min,mouse_pic_x))
+                y_max = int(max(y_max,mouse_pic_y+foreground.size[1]))
+                x_max = int(max(x_max,mouse_pic_x + foreground.size[0]))
+
+                y_min = max(y_min,0)
+                x_min = max(x_min,0)
+                y_max = min(y_max,image_y_max)
+                x_max = min(x_max,image_x_max)
+                boxes_pray = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
 
                 # Save the result
+                filename_pray = f"{filename.split('.')[0]}-pray.jpg"
                 background = background.convert('RGB')
                 background.save(os.path.join(output_dir,f"{filename.split('.')[0]}-pray.jpg"))
+                image_np_pray = np.array(background)
 
+
+                (x,y,w,h) = bounding_box_xy_min_max_to_xy_wh(x_min,y_min,x_max,y_max)
+
+                bounding_box = dict()
+                bounding_box["label"] = "cat_pray"
+                bounding_box["coordinates"] = {"y": y,"x": x, "width": w, "height": h}
+
+                a = dict()
+                a["image"] = filename_pray
+                a["annotations"] = bounding_box
+
+                ml_annotations.append(a)
 
     
             # writer = tf.python_io.TFRecordWriter(FLAGS.output_path)
             if arg['--show_images']:
-                boxes = np.array([np.hstack(((y_min,x_min),(y_max,x_max)))])
 
                 # print(boxes)
                 classes = np.array([1])
@@ -213,6 +260,16 @@ def create_cat_image_data_set(arg,input_directory):
                     None,
                     category_index)
                 Image.fromarray(image_np).save(os.path.join("tmp",filename))
+
+
+                classes = np.array([2])
+                vis_util.visualize_boxes_and_labels_on_image_array(
+                    image_np_pray,
+                    boxes_pray,
+                    classes,
+                    None,
+                    category_index)
+                Image.fromarray(image_np_pray).save(os.path.join("tmp",filename_pray))                
 
 
 
@@ -239,7 +296,9 @@ def create_tf_records(arg,directory,record_file):
 
     print(len(ml_annotations))
     with tf.io.TFRecordWriter(record_file) as writer:
+        i = 0
         for annotation in tqdm.tqdm(ml_annotations):
+            i += 1
 
 
             file = os.path.join(directory, annotation["image"])
@@ -289,6 +348,9 @@ def create_tf_records(arg,directory,record_file):
                     category_index)
                 Image.fromarray(image_np).save(os.path.join("tmp",os.path.basename(annotation["image"])))
 
+            if arg['--number_pictures']:
+                if i > int(arg['--number_pictures']):
+                    break
 
     writer.close()
 
@@ -334,7 +396,7 @@ def convert_and_filter_detections(detections,minimmum_detection_score):
     detections_filtered["num_detections"] = len(detections["detection_scores"])
     return detections_filtered
 
-def is_class(model, image_path,class_id):
+def is_class(model, image_path,class_ids):
 
     img = cv2.imread(os.path.abspath(image_path))
     image_np = np.array(img)
@@ -346,7 +408,7 @@ def is_class(model, image_path,class_id):
     detections_filtered = convert_and_filter_detections(detections,minimmum_detection_score)
 
     for i,x in enumerate(detections_filtered['detection_classes']):
-        if x==class_id:
+        if x in class_ids:
             return True
 
 
@@ -407,7 +469,7 @@ def main(arg):
             total+=1
             print(image_path)
 
-            if is_class(detection_model, image_path, 1):
+            if is_class(detection_model, image_path, [2]):
                 detected+=1
             
             if arg["--show_images"]:
