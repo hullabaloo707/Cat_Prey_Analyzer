@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.jupyter_ystore.db
+
 # C extensions
 *.so
 

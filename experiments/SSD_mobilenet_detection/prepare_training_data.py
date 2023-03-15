@@ -642,6 +642,10 @@ def main(arg):
     print(gpu_docker_command)
 
 
+    # start jupyther lab session
+    # docker run -p 8080:8888 -v $(pwd):$(pwd) -v /home/a0000233/.local/:/.local/ -u $(id -u):$(id -g) -w $(pwd) --gpus all -it --env NVIDIA_DISABLE_REQUIRE=1 test:latest  bash -c "source venv/bin/activate && jupyter-lab --ip 0.0.0.0 --no-browser --collaborative"
+
+
 # INFO:tensorflow:{'Loss/classification_loss': 2.2574234,
 #                  'Loss/localization_loss': 0.5220827,
 #                  'Loss/regularization_loss': 0.085143425,
